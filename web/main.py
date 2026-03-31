@@ -1,99 +1,92 @@
 import streamlit as st
-import base64
+from core.database import supabase
 
-# පේජ් එකේ සැකසුම්
-st.set_page_config(page_title="Phylax Gateway | AI Data Monetization", layout="centered", page_icon="🛡️")
+# --- UI SETTINGS ---
+st.set_page_config(page_title="Phylax | Onboarding", layout="centered")
 
-# --- CUSTOM CSS FOR PROFESSIONAL LOOK ---
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3em;
-        background-color: #0062ff;
-        color: white;
-        font-weight: bold;
-        border: none;
-        transition: 0.3s;
-    }
-    .stButton>button:hover { background-color: #004ecc; border: none; color: white; }
-    .login-container {
-        padding: 30px;
-        border-radius: 15px;
-        background-color: white;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-        border: 1px solid #e0e0e0;
-    }
-    h1 { color: #1e293b; text-align: center; font-family: 'Inter', sans-serif; }
-    .subtitle { text-align: center; color: #64748b; margin-bottom: 2rem; }
-    </style>
-    """, unsafe_allow_html=True)
+if "step" not in st.session_state:
+    st.session_state.step = "auth" # auth -> role_selection -> form -> dashboard
 
-# --- LOGIN / SESSION LOGIC ---
-if "auth_status" not in st.session_state:
-    st.session_state.auth_status = False
-    st.session_state.user_role = None
-
-def login(role):
-    # Investorsලට පෙන්වන්න සරල ලොජික් එකක් (පස්සේ Supabase Auth දාමු)
-    st.session_state.auth_status = True
-    st.session_state.user_role = role
-    st.rerun()
-
-# --- UI RENDERING ---
-if not st.session_state.auth_status:
-    st.markdown("<h1>🛡️ Phylax Gateway</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='subtitle'>The Secure Protocol for AI-to-Web Transactions</p>", unsafe_allow_html=True)
-
-    with st.container():
-        # Login Form එක මැදට ගැනීම සඳහා columns පාවිච්චි කරමු
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col2:
-            st.markdown('<div class="login-container">', unsafe_allow_html=True)
-            
-            tab1, tab2 = st.tabs(["Sign In", "Create Account"])
-            
-            with tab1:
-                email = st.text_input("Work Email", placeholder="name@company.com")
-                password = st.text_input("Password", type="password")
-                role = st.selectbox("I am a...", ["AI Developer", "Website Owner", "Phylax Admin"])
-                
-                if st.button("Access Dashboard"):
-                    if email and password:
-                        login(role)
-                    else:
-                        st.error("Please enter credentials")
-            
-            with tab2:
-                st.info("Join the ecosystem to monetize or access data.")
-                new_email = st.text_input("Full Name")
-                st.selectbox("Select Role", ["AI Agency", "Data Publisher", "Researcher"])
-                if st.button("Start 14-Day Free Trial"):
-                    st.success("Welcome aboard! Please Sign In.")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-else:
-    # Login වුණාට පස්සේ පේන Sidebar එක
-    st.sidebar.title("🛡️ Phylax Portal")
-    st.sidebar.success(f"Connected: {st.session_state.user_role}")
+# --- 1. AUTH STEP (Login/Signup) ---
+if st.session_state.step == "auth":
+    st.title("🛡️ Welcome to Phylax")
+    tab1, tab2 = st.tabs(["Login", "Create Account"])
     
-    if st.sidebar.button("Log Out"):
-        st.session_state.auth_status = False
-        st.rerun()
+    with tab2:
+        email = st.text_input("Email Address")
+        password = st.text_input("Choose Password", type="password")
+        if st.button("Sign Up"):
+            # මෙතනදී අපි සරලව Step එක මාරු කරමු (Demo එකක් නිසා)
+            st.session_state.temp_email = email
+            st.session_state.step = "role_selection"
+            st.rerun()
 
-    # --- ROLE ROUTING ---
+# --- 2. ROLE SELECTION ---
+elif st.session_state.step == "role_selection":
+    st.title("Identify Your Role")
+    st.write(f"Setting up account for: **{st.session_state.temp_email}**")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🤖 I am an AI Developer"):
+            st.session_state.user_role = "AI Developer"
+            st.session_state.step = "form"
+            st.rerun()
+    with col2:
+        if st.button("🌐 I am a Website Owner"):
+            st.session_state.user_role = "Website Owner"
+            st.session_state.step = "form"
+            st.rerun()
+
+# --- 3. ROLE-SPECIFIC FORM ---
+elif st.session_state.step == "form":
+    st.title(f"Complete {st.session_state.user_role} Profile")
+    
     if st.session_state.user_role == "AI Developer":
-        st.title("🤖 Developer Terminal")
-        st.info("Manage your AI Bot instances and API usage.")
-        # මෙතනට අපි කලින් හදපු ai_portal එකේ logic ටික ලස්සන කරලා දාමු
+        bot_name = st.text_input("Bot Name (e.g. GPT-Crawler)")
+        bot_url = st.text_input("Bot / API URL (Optional)")
+        bot_ip = st.text_input("Primary Server IP (for Security)")
+        use_case = st.selectbox("Intended Use", ["LLM Training", "Price Monitoring", "Academic Research"])
         
-    elif st.session_state.user_role == "Website Owner":
-        st.title("🌐 Publisher Dashboard")
-        st.info("Monetize your web traffic from AI crawlers.")
+        if st.button("Complete Setup & Get $10 Credits"):
+            # Database එකට Save කිරීම (ai_partners)
+            new_key = f"sk_phylax_{bot_name[:3]}_demo"
+            supabase.table("ai_partners").insert({
+                "company_name": bot_name, "api_key": new_key, "balance": 10.00,
+                "bot_url": bot_url, "bot_ip": bot_ip, "use_case": use_case
+            }).execute()
+            st.session_state.step = "dashboard"
+            st.rerun()
+
+    else: # Website Owner
+        site_name = st.text_input("Website Name")
+        site_url = st.text_input("Website URL (https://...)")
+        category = st.selectbox("Content Niche", ["News", "E-commerce", "Blog", "Scientific Data"])
+        price = st.number_input("Target Price per Request ($)", value=0.005, format="%.4f")
         
-    elif st.session_state.user_role == "Phylax Admin":
-        st.title("👑 System Governance")
-        st.warning("Global Oversight: Monitoring all network transactions.")
+        if st.button("Verify Website & Start Earning"):
+            # Database එකට Save කිරීම (registered_sites)
+            supabase.table("registered_sites").insert({
+                "url": site_url, "site_name": site_name, 
+                "category": category, "price_per_request": price
+            }).execute()
+            st.session_state.step = "dashboard"
+            st.rerun()
+
+# --- 4. THE DASHBOARD (Final View) ---
+elif st.session_state.step == "dashboard":
+    st.sidebar.title("🛡️ Phylax Gateway")
+    st.sidebar.write(f"Logged as: {st.session_state.user_role}")
+    
+    if st.session_state.user_role == "AI Developer":
+        st.header("🤖 Developer Control Panel")
+        st.success("Your bot is active. Use your API key to access data.")
+        # මෙතනට පස්සේ Spending charts දාමු
+    else:
+        st.header("🌐 Publisher Revenue Dashboard")
+        st.success("Monetization active. Monitoring incoming bot traffic.")
+        # මෙතනට පස්සේ Earnings charts දාමු
+
+    if st.sidebar.button("Log Out"):
+        st.session_state.step = "auth"
+        st.rerun()
